@@ -1,17 +1,30 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, jsonify, request
 import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from core import database as db
-from modules.calculadora.calc import calcular_verbas
-from modules.ia.gerador import GeradorPecas
-
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 
-db.init_db()
-gerador = GeradorPecas()
+try:
+    from core import database as db
+    db.init_db()
+except Exception as e:
+    print(f"Database error: {e}")
+    db = None
+
+try:
+    from modules.calculadora.calc import calcular_verbas
+except Exception as e:
+    print(f"Calculator error: {e}")
+    calcular_verbas = None
+
+try:
+    from modules.ia.gerador import GeradorPecas
+    gerador = GeradorPecas()
+except Exception as e:
+    print(f"Generator error: {e}")
+    gerador = None
 
 def formatar_moeda(valor):
     try:
