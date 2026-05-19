@@ -12,6 +12,7 @@ from datetime import datetime
 from main import app, get_db
 from database import Base, Tenant, User, UserRole
 from auth import hash_password
+from passlib.context import CryptContext
 
 # Usar banco de dados em memória para testes
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -21,7 +22,15 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base.metadata.create_all(bind=engine)
+# CRÍTICO: Criar tabelas antes de usar
+Base.metadata.create_all(bind=engine, checkfirst=True)
+
+test_pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+
+def hash_password_test(password: str) -> str:
+    """Hash de senha para testes com backend compatível."""
+    return test_pwd_context.hash(password)
 
 
 def override_get_db():
@@ -76,7 +85,7 @@ def test_admin_user(db, test_tenant):
         tenant_id=test_tenant.id,
         email="admin@company.com",
         full_name="Admin User",
-        hashed_password=hash_password("TestPass123"),
+        hashed_password=hash_password_test("TestPass123"),
         role=UserRole.ADMIN,
         is_active=True
     )
@@ -94,7 +103,7 @@ def test_regular_user(db, test_tenant):
         tenant_id=test_tenant.id,
         email="user@company.com",
         full_name="Regular User",
-        hashed_password=hash_password("TestPass123"),
+        hashed_password=hash_password_test("TestPass123"),
         role=UserRole.USER,
         is_active=True
     )

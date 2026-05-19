@@ -6,7 +6,7 @@ Sistema SaaS de gestão jurídica com suporte multi-tenant
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 import os
 from dotenv import load_dotenv
@@ -85,7 +85,7 @@ async def root():
 async def health_check(db: Session = Depends(get_db)):
     """Health check com verificação de banco de dados"""
     try:
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         return {
             "status": "healthy",
             "database": "connected"
