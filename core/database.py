@@ -5,7 +5,8 @@ SQLite local com tabelas: clientes, processos, magistrados, acordos, referência
 import sqlite3
 import os
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
+import json
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "juridico.db")
 
@@ -498,3 +499,180 @@ def delete_generated_piece(piece_id: int):
     conn.execute("DELETE FROM generated_pieces WHERE id=?", (piece_id,))
     conn.commit()
     conn.close()
+
+
+# ==================== BACKUP/RESTORE ====================
+def backup_database(backup_path: str) -> Tuple[bool, str]:
+    """
+    Realiza backup de todos os dados do banco de dados
+    
+    Args:
+        backup_path: Caminho do arquivo de backup (JSON)
+    
+    Returns:
+        Tuple[bool, str]: (sucesso, mensagem)
+    """
+    try:
+        backup_data = {
+            'backup_date': datetime.now().isoformat(),
+            'database_version': '2.0',
+            'clientes': get_all_clientes(),
+            'judges': get_all_judges(),
+            'lawsuits': get_all_lawsuits(),
+            'settlements': get_all_settlements(),
+            'legal_references': get_all_legal_references(),
+            'negotiation_params': get_all_negotiation_params(),
+            'generated_pieces': get_generated_pieces(),
+        }
+        
+        # Salvar em JSON
+        with open(backup_path, 'w', encoding='utf-8') as f:
+            json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
+        
+        return True, f"Backup realizado com sucesso: {backup_path}"
+    
+    except Exception as e:
+        return False, f"Erro ao realizar backup: {str(e)}"
+
+
+def restore_database(backup_path: str, clear_existing: bool = False) -> Tuple[bool, str]:
+    """
+    Restaura dados de um arquivo de backup
+    
+    Args:
+        backup_path: Caminho do arquivo de backup
+        clear_existing: Se True, limpa dados existentes antes de restaurar
+    
+    Returns:
+        Tuple[bool, str]: (sucesso, mensagem)
+    """
+    try:
+        # Ler arquivo de backup
+        with open(backup_path, 'r', encoding='utf-8') as f:
+            backup_data = json.load(f)
+        
+        conn = get_connection()
+        
+        if clear_existing:
+            # Limpar tabelas existentes
+            conn.execute("DELETE FROM generated_pieces")
+            conn.execute("DELETE FROM negotiation_params")
+            conn.execute("DELETE FROM settlements")
+            conn.execute("DELETE FROM lawsuits")
+            conn.execute("DELETE FROM judges")
+            conn.execute("DELETE FROM legal_references")
+            conn.execute("DELETE FROM clientes")
+            conn.commit()
+        
+        # Restaurar clientes
+        for cliente in backup_data.get('clientes', []):
+            conn.execute(
+                "INSERT OR REPLACE INTO clientes (id, nome, cpf, telefone, email, endereco, observacoes, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (cliente.get('id'), cliente.get('nome'), cliente.get('cpf'), cliente.get('telefone'),
+                 cliente.get('email'), cliente.get('endereco'), cliente.get('observacoes'), cliente.get('created_at'))
+            )
+        
+        # Restaurar magistrados
+        for judge in backup_data.get('judges', []):
+            conn.execute(
+                """INSERT OR REPLACE INTO judges (id, name, vara, comarca, tendencia_conciliatoria,
+                   faixa_acordo_min, faixa_acordo_max, postura_justa_causa, postura_acidente,
+                   postura_danos_morais, postura_horas_extras, postura_rescisao_indireta, observacoes, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (judge.get('id'), judge.get('name'), judge.get('vara'), judge.get('comarca'),
+                 judge.get('tendencia_conciliatoria'), judge.get('faixa_acordo_min'), judge.get('faixa_acordo_max'),
+                 judge.get('postura_justa_causa'), judge.get('postura_acidente'), judge.get('postura_danos_morais'),
+                 judge.get('postura_horas_extras'), judge.get('postura_rescisao_indireta'),
+                 judge.get('observacoes'), judge.get('created_at'))
+            )
+        
+        # Restaurar processos
+        for lawsuit in backup_data.get('lawsuits', []):
+            conn.execute(
+                """INSERT OR REPLACE INTO lawsuits (id, numero_processo, vara, judge_id, cliente_id,
+                   reclamante, reclamada, tese_inicial, tese_defesa, status, resultado,
+                   valor_pedido, valor_obtido, economia_processual, data_distribuicao, data_encerramento, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (lawsuit.get('id'), lawsuit.get('numero_processo'), lawsuit.get('vara'), lawsuit.get('judge_id'),
+                 lawsuit.get('cliente_id'), lawsuit.get('reclamante'), lawsuit.get('reclamada'),
+                 lawsuit.get('tese_inicial'), lawsuit.get('tese_defesa'), lawsuit.get('status'),
+                 lawsuit.get('resultado'), lawsuit.get('valor_pedido'), lawsuit.get('valor_obtido'),
+                 lawsuit.get('economia_processual'), lawsuit.get('data_distribuicao'), lawsuit.get('data_encerramento'),
+                 lawsuit.get('created_at'))
+            )
+        
+        # Restaurar acordos
+        for settlement in backup_data.get('settlements', []):
+            conn.execute(
+                """INSERT OR REPLACE INTO settlements (id, lawsuit_id, tipo, valor_pedido, valor_obtido,
+                   parcelas, condicao_parcelamento, clausulas_especiais, data_homologacao, dados_bancarios,
+                   observacoes, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (settlement.get('id'), settlement.get('lawsuit_id'), settlement.get('tipo'),
+                 settlement.get('valor_pedido'), settlement.get('valor_obtido'), settlement.get('parcelas'),
+                 settlement.get('condicao_parcelamento'), settlement.get('clausulas_especiais'),
+                 settlement.get('data_homologacao'), settlement.get('dados_bancarios'),
+                 settlement.get('observacoes'), settlement.get('created_at'))
+            )
+        
+        # Restaurar referências jurídicas
+        for ref in backup_data.get('legal_references', []):
+            conn.execute(
+                """INSERT OR REPLACE INTO legal_references (id, tipo, tema, titulo, autor, fonte, trecho, ano, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (ref.get('id'), ref.get('tipo'), ref.get('tema'), ref.get('titulo'), ref.get('autor'),
+                 ref.get('fonte'), ref.get('trecho'), ref.get('ano'), ref.get('created_at'))
+            )
+        
+        # Restaurar parâmetros de negociação
+        for param in backup_data.get('negotiation_params', []):
+            conn.execute(
+                """INSERT OR REPLACE INTO negotiation_params (id, judge_id, tema_processual,
+                   valor_inicial_sugerido, faixa_fechamento_min, faixa_fechamento_max,
+                   estrategia_recomendada, observacoes, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (param.get('id'), param.get('judge_id'), param.get('tema_processual'),
+                 param.get('valor_inicial_sugerido'), param.get('faixa_fechamento_min'),
+                 param.get('faixa_fechamento_max'), param.get('estrategia_recomendada'),
+                 param.get('observacoes'), param.get('created_at'))
+            )
+        
+        # Restaurar peças geradas
+        for piece in backup_data.get('generated_pieces', []):
+            conn.execute(
+                """INSERT OR REPLACE INTO generated_pieces (id, lawsuit_id, tipo_peca, conteudo, gerado_por, created_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (piece.get('id'), piece.get('lawsuit_id'), piece.get('tipo_peca'),
+                 piece.get('conteudo'), piece.get('gerado_por'), piece.get('created_at'))
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        total_items = (len(backup_data.get('clientes', [])) +
+                      len(backup_data.get('judges', [])) +
+                      len(backup_data.get('lawsuits', [])))
+        
+        return True, f"Restauração concluída: {total_items} itens restaurados"
+    
+    except Exception as e:
+        return False, f"Erro ao restaurar backup: {str(e)}"
+
+
+def get_database_stats() -> Dict[str, Any]:
+    """
+    Retorna estatísticas do banco de dados
+    
+    Returns:
+        Dict com estatísticas
+    """
+    return {
+        'total_clientes': len(get_all_clientes()),
+        'total_juizes': len(get_all_judges()),
+        'total_processos': len(get_all_lawsuits()),
+        'total_acordos': len(get_all_settlements()),
+        'total_referencias': len(get_all_legal_references()),
+        'total_pecas': len(get_generated_pieces()),
+        'backup_path': DB_PATH,
+        'last_backup': None,  # Seria atualizado após backup
+    }
