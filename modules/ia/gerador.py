@@ -14,22 +14,31 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 TIPOS_PECA = {
-    'reclamatoria_trabalhista': 'RECLAMATÓRIA TRABALHISTA',
-    'contestacao': 'CONTESTAÇÃO TRABALHISTA',
-    'alegacoes_finais': 'ALEGAÇÕES FINAIS',
-    'rol_perguntas': 'ROL DE PERGUNTAS PARA TESTEMUNHAS',
-    'recurso_ordinario': 'RECURSO ORDINÁRIO',
-    'impugnacao': 'IMPUGNAÇÃO AOS CÁLCULOS DE LIQUIDAÇÃO',
-    'manifestacao': 'MANIFESTAÇÃO',
-    'pedido_habilitacao': 'PEDIDO DE HABILITAÇÃO',
-    'procuracao': 'PROCURAÇÃO AD JUDICIA',
-    'replica': 'RÉPLICA À CONTESTAÇÃO',
+    'reclamatoria_trabalhista': {'nome': 'RECLAMATÓRIA TRABALHISTA'},
+    'contestacao': {'nome': 'CONTESTAÇÃO TRABALHISTA'},
+    'alegacoes_finais': {'nome': 'ALEGAÇÕES FINAIS'},
+    'rol_perguntas': {'nome': 'ROL DE PERGUNTAS PARA TESTEMUNHAS'},
+    'recurso_ordinario': {'nome': 'RECURSO ORDINÁRIO'},
+    'impugnacao': {'nome': 'IMPUGNAÇÃO AOS CÁLCULOS DE LIQUIDAÇÃO'},
+    'manifestacao': {'nome': 'MANIFESTAÇÃO'},
+    'pedido_habilitacao': {'nome': 'PEDIDO DE HABILITAÇÃO'},
+    'procuracao': {'nome': 'PROCURAÇÃO AD JUDICIA'},
+    'replica': {'nome': 'RÉPLICA À CONTESTAÇÃO'},
 }
 
 
 class GeradorPecas:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self.model = "gpt-4.1"
+        self.client = None
+        if OPENAI_AVAILABLE and self.api_key:
+            self.client = OpenAI(api_key=self.api_key)
+
+    def atualizar_configuracao(self, api_key: Optional[str], model: Optional[str] = None):
+        self.api_key = api_key or ""
+        if model:
+            self.model = model
         self.client = None
         if OPENAI_AVAILABLE and self.api_key:
             self.client = OpenAI(api_key=self.api_key)
@@ -47,7 +56,7 @@ class GeradorPecas:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -61,7 +70,7 @@ class GeradorPecas:
                 lawsuit, judge, refs, tipo, instrucoes)
 
     def _build_system_prompt(self, tipo: str) -> str:
-        label = TIPOS_PECA.get(tipo, tipo.upper())
+        label = TIPOS_PECA.get(tipo, {}).get('nome', tipo.upper())
         polo = "RECLAMANTE" if tipo == 'reclamatoria_trabalhista' else "RECLAMADA"
         return f"""Você é um advogado trabalhista brasileiro especializado na elaboração de peças jurídicas.
 Sua tarefa é redigir uma {label} de alto nível técnico, atuando pelo polo {polo}.
@@ -119,7 +128,7 @@ REGRAS OBRIGATÓRIAS:
         if instrucoes:
             prompt_parts.append(f"\n=== INSTRUÇÕES ADICIONAIS DO ADVOGADO ===\n{instrucoes}")
 
-        label = TIPOS_PECA.get(tipo, tipo.upper())
+        label = TIPOS_PECA.get(tipo, {}).get('nome', tipo.upper())
         prompt_parts.append(f"\nElabore uma {label} com base nos dados acima.")
 
         return '\n'.join(prompt_parts)
@@ -127,7 +136,7 @@ REGRAS OBRIGATÓRIAS:
     def _gerar_template_local(self, lawsuit: Dict, judge: Optional[Dict],
                                refs: List[Dict], tipo: str, instrucoes: str) -> str:
         """Fallback: gera template estruturado sem IA"""
-        label = TIPOS_PECA.get(tipo, tipo.upper())
+        label = TIPOS_PECA.get(tipo, {}).get('nome', tipo.upper())
         num = lawsuit.get('numero_processo', 'N/A')
         vara = lawsuit.get('vara', 'N/A')
         reclamante = lawsuit.get('reclamante', 'N/A')

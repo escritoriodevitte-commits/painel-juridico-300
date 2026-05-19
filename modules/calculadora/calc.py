@@ -49,6 +49,9 @@ TABELA_IRRF_2026 = [
 
 DEDUCAO_DEPENDENTE_IRRF = 189.59
 
+# Contribuição sindical 2026 (padrão 1 dia de trabalho)
+CONTRIBUICAO_SINDICAL_PERCENTUAL = 1 / 30  # 1 dia de 30 dias de trabalho
+
 # Salário-família 2026 (estimativa baseada em 2025)
 SALARIO_FAMILIA_TETO = 1819.26
 SALARIO_FAMILIA_VALOR = 62.04
@@ -447,6 +450,93 @@ def calcular_reflexos(valor_mensal, meses_13=None, meses_ferias=None):
         reflexos['sobre_terco_ferias'] = round(ferias / 3, 2)
     reflexos['sobre_fgts_mensal'] = round(valor_mensal * 0.08, 2)
     return reflexos
+
+
+def calcular_reflexos_fgts_completos(remuneracao_habitual, horas_extras_total, dsr_he, adic_noturno_valor, insalub_valor, pericu_valor, meses_trabalhados=1):
+    """
+    Calcula reflexos FGTS sobre TODOS os adicionais conforme Lei 8.036/90
+    O FGTS (8%) incide sobre: salário + HE + DSR + noturno + insalubridade + periculosidade
+    """
+    base_fgts_mensal = remuneracao_habitual + horas_extras_total + dsr_he + adic_noturno_valor + insalub_valor + pericu_valor
+    fgts_mensal = round(base_fgts_mensal * 0.08, 2)
+    fgts_total = round(fgts_mensal * meses_trabalhados, 2)
+    return {
+        'base_mensal': round(base_fgts_mensal, 2),
+        'fgts_mensal': fgts_mensal,
+        'meses_trabalhados': meses_trabalhados,
+        'fgts_total': fgts_total,
+    }
+
+
+def calcular_licenca_premio(remuneracao, anos_servico, periodos_nao_utilizados=0):
+    """
+    Licença-prêmio (30 dias a cada 5 anos de serviço)
+    Conversível em dinheiro no desligamento (art. 153 CLT)
+    """
+    # 1 período de 30 dias a cada 5 anos completos
+    periodos_adquiridos = int(anos_servico // 5)
+    periodos_disponiveis = periodos_adquiridos - periodos_nao_utilizados
+    
+    remuneracao_diaria = remuneracao / 30
+    valor_licenca = round(remuneracao_diaria * 30 * periodos_disponiveis, 2)
+    
+    return {
+        'periodos_adquiridos': periodos_adquiridos,
+        'periodos_utilizados': periodos_nao_utilizados,
+        'periodos_disponiveis': max(periodos_disponiveis, 0),
+        'valor_por_periodo': round(remuneracao_diaria * 30, 2),
+        'valor_total': valor_licenca,
+    }
+
+
+def calcular_abono_ferias(remuneracao, meses_ferias_direito=12, parte_convertida=1):
+    """
+    Abono de férias (art. 143 CLT - conversão de 1/3)
+    Permite converter 1/3 (ou mais) das férias em dinheiro
+    """
+    ferias_simples = round(remuneracao / 12 * meses_ferias_direito, 2)
+    terco = round(ferias_simples / 3, 2)
+    
+    # Parte convertida em dinheiro (padrão 1/3, máximo 10 dias do direito de férias)
+    abono = round(terco * parte_convertida, 2) if parte_convertida <= 1 else round(ferias_simples * (parte_convertida / 3), 2)
+    ferias_gozadas = round(ferias_simples - abono, 2)
+    
+    return {
+        'ferias_simples': ferias_simples,
+        'terco_ferias': terco,
+        'parte_convertida_percentual': parte_convertida * 100 if parte_convertida <= 1 else (parte_convertida / 3 * 100),
+        'abono_dinheiro': abono,
+        'ferias_gozadas': ferias_gozadas,
+        'total': round(ferias_simples, 2),
+    }
+
+
+def calcular_contribuicao_sindical(remuneracao, aplica=False):
+    """
+    Contribuição sindical (Lei 5.584/70)
+    Desconto de 1 dia de trabalho quando houver assembléia para eleição
+    Normalmente cobrado em março (mês de eleição dos sindicatos)
+    """
+    if not aplica:
+        return 0
+    return round(remuneracao / 30, 2)
+
+
+def calcular_irrf_progressivo_13(valor_13, num_dependentes=0):
+    """
+    IRRF sobre 13º salário com cálculo separado e alíquota progressiva
+    Base de cálculo separada (art. 12-B da Lei 7.713/88)
+    """
+    # O 13º tem tributação especial (isolada do resto da renda)
+    base = valor_13 - (num_dependentes * DEDUCAO_DEPENDENTE_IRRF)
+    if base <= 0:
+        return 0
+    
+    # Aplicar tabela IRRF normal
+    for teto, aliquota, deducao in TABELA_IRRF_2026:
+        if base <= teto:
+            return round(max(base * aliquota - deducao, 0), 2)
+    return 0
 
 
 # ==================== FUNÇÃO PRINCIPAL ====================

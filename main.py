@@ -1402,8 +1402,7 @@ class PainelJuridico(ctk.CTk):
 
         def salvar_config():
             key = key_entry.get().strip()
-            self.gerador.api_key = key if key else None
-            self.gerador.model = model_var.get()
+            self.gerador.atualizar_configuracao(key if key else None, model_var.get())
             messagebox.showinfo("Sucesso", "Configuração salva!")
             self.show_page("api_config")
 
