@@ -18,6 +18,7 @@ from modules.ia.gerador import GeradorPecas, TIPOS_PECA
 from modules.exports.pdf import PDFExporter
 from modules.exports.csv_export import CSVExporter
 from modules.api_bridge import LegalAIClient
+from modules.ui.validation_integration import FormValidator
 from seed import run_seed
 
 # ==================== CORES ====================
@@ -329,9 +330,13 @@ class PainelJuridico(ctk.CTk):
                     d[k] = widget.get("1.0", "end").strip()
                 else:
                     d[k] = widget.get().strip()
-            if not d.get('numero_processo') or not d.get('vara') or not d.get('reclamante') or not d.get('reclamada'):
-                messagebox.showwarning("Aviso", "Campos obrigatórios: Número, Vara, Reclamante, Reclamada")
+            
+            # Validar campos de processo
+            valid, error_msg = FormValidator.validate_processo_fields(d)
+            if not valid:
+                messagebox.showwarning("Validação", f"Erro na validação: {error_msg}")
                 return
+            
             d['status'] = status_var.get()
             jv = judge_var.get()
             d['judge_id'] = int(jv.split(" - ")[0]) if jv != "(Nenhum)" else None
@@ -427,9 +432,13 @@ class PainelJuridico(ctk.CTk):
 
         def save():
             d = {k: e.get().strip() for k, e in fields.items()}
-            if not d.get('nome'):
-                messagebox.showwarning("Aviso", "Nome é obrigatório")
+            
+            # Validar campos de cliente
+            valid, error_msg = FormValidator.validate_cliente_fields(d)
+            if not valid:
+                messagebox.showwarning("Validação", f"Erro na validação: {error_msg}")
                 return
+            
             if mode == "create":
                 db.create_cliente(d)
                 messagebox.showinfo("Sucesso", "Cliente cadastrado!")
