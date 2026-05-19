@@ -9,9 +9,8 @@ from typing import Optional, List, Dict
 from sqlalchemy.orm import Session
 import os
 
-from dependencies import get_current_user, get_current_tenant
+from dependencies import get_current_user, get_current_tenant, get_db
 from database import User, Tenant
-from main import get_db
 from services.ia_service import get_ia_service
 
 router = APIRouter(prefix="/ia", tags=["IA - Geração de Peças"])

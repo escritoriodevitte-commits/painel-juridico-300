@@ -19,7 +19,7 @@ from auth import (
     decode_refresh_token,
     decode_access_token
 )
-from main import get_db
+from dependencies import get_db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

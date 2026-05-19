@@ -11,7 +11,15 @@ from typing import Optional
 
 from auth import decode_access_token
 from database import User, Tenant
-from main import get_db
+
+def get_db():
+    """Dependency para obter sessão do banco de dados"""
+    from main import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 security = HTTPBearer()
 

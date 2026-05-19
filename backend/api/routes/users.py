@@ -11,9 +11,8 @@ import uuid
 
 from schemas import UserResponse, UserCreate
 from database import User, UserRole, Tenant
-from dependencies import get_current_user, get_current_tenant, require_admin
+from dependencies import get_current_user, get_current_tenant, require_admin, get_db
 from auth import hash_password, verify_password
-from main import get_db
 
 router = APIRouter(prefix="/users", tags=["Users Management"])
 
