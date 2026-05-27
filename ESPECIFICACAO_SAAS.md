@@ -145,7 +145,8 @@
 - Relatórios financeiros. [parcial] Acessível ao perfil **Financeiro**.
 
 ## IA
-- Gerar petições (base em `modules/ia/gerador.py` + endpoint com fallback em `backend/`). [parcial]
+- Gerar petições — endpoint `backend/` usando a **API da Claude (Anthropic)**, com
+  fallback de template local quando não há chave. Modelo via `CLAUDE_MODEL`. [implementado]
 - Resumir PDFs. [alvo]
 - Responder perguntas jurídicas. [alvo]
 - Analisar contratos. [alvo]

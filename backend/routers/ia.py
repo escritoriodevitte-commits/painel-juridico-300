@@ -1,11 +1,23 @@
-"""IA: geração de petição via OpenAI quando há chave; senão, template local."""
+"""IA: geração de petição via Claude (Anthropic) quando há chave; senão, template local."""
+import logging
+
 from fastapi import APIRouter, Depends
 
 from .. import models, schemas
 from ..config import settings
 from ..deps import require_roles
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/ia", tags=["ia"])
+
+# Prompt de sistema frozen (sem dados voláteis) — bom para cache de prefixo.
+_SYSTEM = (
+    "Você é um advogado trabalhista brasileiro experiente. Redija peças jurídicas "
+    "formais em português, conforme a CLT e a praxe forense, com endereçamento, "
+    "exposição dos fatos, fundamentação jurídica, pedidos e fecho. Use linguagem "
+    "técnica e impessoal. Não invente fatos além dos informados."
+)
 
 
 def _template(p: schemas.PeticaoIn) -> str:
@@ -19,32 +31,38 @@ def _template(p: schemas.PeticaoIn) -> str:
     )
 
 
-def _gerar_openai(p: schemas.PeticaoIn) -> str | None:
-    if not settings.OPENAI_API_KEY:
+def _gerar_claude(p: schemas.PeticaoIn) -> str | None:
+    """Gera a peça via Claude. Retorna None se não houver chave ou em caso de falha."""
+    if not settings.ANTHROPIC_API_KEY:
         return None
     try:
-        from openai import OpenAI
+        import anthropic
 
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        resp = client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model=settings.CLAUDE_MODEL,
+            max_tokens=4096,
+            system=[
                 {
-                    "role": "system",
-                    "content": "Você é advogado trabalhista. Redija peças jurídicas em português.",
-                },
+                    "type": "text",
+                    "text": _SYSTEM,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[
                 {
                     "role": "user",
                     "content": (
-                        f"Tipo de peça: {p.tipo}\nCliente: {p.cliente_nome}\n"
-                        f"Fatos: {p.fatos}\nPedidos: {p.pedidos}"
+                        f"Redija uma peça do tipo \"{p.tipo}\" para o(a) cliente "
+                        f"{p.cliente_nome}.\n\nFATOS:\n{p.fatos}\n\nPEDIDOS:\n{p.pedidos}"
                     ),
-                },
+                }
             ],
         )
-        return resp.choices[0].message.content
+        return "".join(b.text for b in message.content if b.type == "text").strip() or None
     except Exception:
-        # Falha na IA externa não derruba o endpoint: cai no template.
+        # Falha na IA não derruba o endpoint: cai no template local.
+        logger.exception("Falha ao gerar petição via Claude; usando template")
         return None
 
 
@@ -53,9 +71,9 @@ def gerar_peticao(
     payload: schemas.PeticaoIn,
     _user: models.User = Depends(require_roles("admin", "advogado")),
 ):
-    texto = _gerar_openai(payload)
-    if texto is not None:
-        return schemas.PeticaoOut(tipo=payload.tipo, fonte="openai", texto=texto)
+    texto = _gerar_claude(payload)
+    if texto:
+        return schemas.PeticaoOut(tipo=payload.tipo, fonte="claude", texto=texto)
     return schemas.PeticaoOut(
         tipo=payload.tipo, fonte="template", texto=_template(payload)
     )

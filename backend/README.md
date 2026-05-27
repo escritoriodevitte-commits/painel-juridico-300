@@ -63,7 +63,7 @@ curl localhost:8000/api/v1/clientes -H 'Authorization: Bearer <ACCESS_TOKEN>'
 | `routers/processos.py` | CRUD de processos + andamentos + audiências |
 | `routers/tarefas.py` | CRUD de tarefas |
 | `routers/financeiro.py` | Honorários + relatório (perfil financeiro) |
-| `routers/ia.py` | Geração de petição (OpenAI ou template local) |
+| `routers/ia.py` | Geração de petição (Claude/Anthropic ou template local) |
 
 ## Matriz de permissões (RBAC)
 
@@ -117,6 +117,15 @@ Os dois aplicam `alembic upgrade head` no start. Imagem portátil:
 
 Ao crescer, trocar SQLite → Postgres é só mudar `DATABASE_URL` (sem mudar código)
 e subir `WEB_CONCURRENCY`.
+
+## IA (Claude / Anthropic)
+
+`POST /api/v1/ia/peticao` redige peças com a **API da Claude** quando
+`ANTHROPIC_API_KEY` está definida; sem a chave, usa template local (custo R$ 0),
+então o endpoint roda mesmo sem IA. Modelo via `CLAUDE_MODEL` (padrão
+`claude-opus-4-7`; para baratear use `claude-haiku-4-5` ou `claude-sonnet-4-6`).
+Os dados do cliente vão apenas na mensagem do usuário — o prompt de sistema é fixo
+(melhor para cache e para não persistir dados sensíveis no prefixo).
 
 ## Segurança implementada
 

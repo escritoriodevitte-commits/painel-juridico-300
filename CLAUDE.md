@@ -130,7 +130,9 @@ multi-tenant SaaS for labor lawyers (independent of the legacy desktop app
 above, which still cannot run). It implements JWT auth + RBAC over four roles
 (admin, advogado, cliente, financeiro), tenant isolation, and CRUD for clientes,
 processos (with andamentos/audiências), tarefas, and honorários (financeiro),
-plus a template-based IA endpoint. It also ships production-readiness: Alembic
+plus an IA endpoint that drafts petitions via the **Claude (Anthropic) API**
+(`ANTHROPIC_API_KEY` + `CLAUDE_MODEL`, default `claude-opus-4-7`) and falls back to
+a local template when no key is set. It also ships production-readiness: Alembic
 migrations (`alembic.ini`, `backend/migrations/`), in-memory rate limiting on
 auth endpoints, security headers + CORS, a `backend/Dockerfile`, and a `render.yaml`
 Blueprint (web service + Postgres). Run `pytest backend/tests` (12 tests) and

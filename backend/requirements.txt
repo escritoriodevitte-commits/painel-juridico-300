@@ -9,8 +9,8 @@ bcrypt>=4.0
 python-multipart>=0.0.9
 # Driver Postgres (produção). Em SQLite/dev não é usado.
 psycopg[binary]>=3.1
+# IA via Claude (Anthropic). Sem ANTHROPIC_API_KEY, o endpoint usa template local.
+anthropic>=0.40
 # Testes
 pytest>=8.0
 httpx>=0.27
-# Opcional (IA via OpenAI; sem isso, usa template local)
-# openai>=1.0

@@ -38,8 +38,10 @@ class Settings:
     LOGIN_RATE_MAX: int = int(os.environ.get("LOGIN_RATE_MAX", "10"))
     LOGIN_RATE_WINDOW_SEC: int = int(os.environ.get("LOGIN_RATE_WINDOW_SEC", "60"))
 
-    OPENAI_API_KEY: str | None = os.environ.get("OPENAI_API_KEY")
-    OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    # IA via Claude (Anthropic). Sem chave, o endpoint usa template local (R$ 0).
+    ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
+    # Padrão: modelo Claude mais capaz. Para baratear, defina CLAUDE_MODEL=claude-haiku-4-5.
+    CLAUDE_MODEL: str = os.environ.get("CLAUDE_MODEL", "claude-opus-4-7")
 
 
 settings = Settings()

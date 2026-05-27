@@ -178,5 +178,5 @@ class PeticaoIn(BaseModel):
 
 class PeticaoOut(BaseModel):
     tipo: str
-    fonte: Literal["openai", "template"]
+    fonte: Literal["claude", "template"]
     texto: str
