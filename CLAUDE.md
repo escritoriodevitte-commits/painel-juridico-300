@@ -118,3 +118,151 @@ There are dozens of `.md` files (deployment guides, push instructions, status
 reports, translated READMEs) — most are redundant historical artifacts. Treat
 `README.md` as the canonical description of the legal app and ignore the rest
 unless specifically relevant.
+
+---
+
+# Especificação do sistema (12 tópicos)
+
+> Esta seção descreve o sistema em duas camadas:
+> **[ATUAL]** = o que de fato existe no repositório hoje.
+> **[ALVO]** = a visão de produto declarada pelo dono do projeto: um **SaaS
+> jurídico para advogados trabalhistas**. Itens marcados como [ALVO] são
+> objetivos/propostas — ainda não implementados. Não os trate como fato.
+>
+> Direção do produto (declarada): SaaS para advogados trabalhistas que deve
+> gerenciar clientes, controlar processos, gerar documentos, integrar IA,
+> controlar audiências, organizar tarefas e emitir relatórios.
+
+## 1. Objetivo do sistema
+
+- **[ATUAL]** Aplicação **desktop** monousuário (CustomTkinter + SQLite local)
+  para gestão estratégica de processos trabalhistas: cadastro de clientes,
+  processos, magistrados e acordos; calculadora de verbas rescisórias (CLT 2026);
+  biblioteca jurídica; geração de peças com IA; exportação em PDF/CSV/TXT.
+- **[ALVO]** Evoluir para um **SaaS multi-tenant** (web, multiusuário) para
+  escritórios de advocacia trabalhista, com as sete capacidades acima.
+
+## 2. Usuários
+
+- **[ATUAL]** Um único operador local; não há autenticação, contas nem perfis.
+- **[ALVO]** Multiusuário com isolamento por escritório (tenant) e quatro papéis
+  (RBAC), exigindo login e auditoria por usuário:
+  - **Administrador** — gestão do escritório, usuários, permissões e configurações.
+  - **Advogado** — acesso operacional pleno: clientes, processos, audiências,
+    tarefas, documentos e relatórios dos seus casos.
+  - **Cliente** — acesso restrito e somente-leitura aos próprios processos,
+    documentos e andamentos.
+  - **Financeiro** — gestão de honorários, faturamento, acordos e relatórios
+    financeiros; sem acesso ao mérito jurídico dos processos.
+
+## 3. Funcionalidades
+
+- **[ATUAL]** Gestão de clientes/processos/magistrados/acordos; calculadora
+  trabalhista; biblioteca (~51 referências via `seed.py`); geração de 10 tipos
+  de peça (`modules/ia/gerador.py`); módulos de "inteligência" (previsão, motor
+  de teses, radar de risco, análise competitiva via `modules/analytics/engine.py`);
+  exportação PDF/CSV/TXT.
+- **[ALVO]** Sete pilares: (1) gestão de clientes, (2) controle de processos,
+  (3) geração de documentos, (4) IA integrada, (5) **controle de audiências**
+  (agenda/prazos — não existe hoje), (6) **organização de tarefas** (não existe
+  hoje), (7) **emissão de relatórios** (hoje só exportações pontuais).
+  Audiências, tarefas e relatórios consolidados são lacunas a construir.
+
+## 4. Arquitetura
+
+- **[ATUAL]** Monólito desktop: `main.py` (GUI CustomTkinter, ~13 telas) chama
+  diretamente os pacotes `core/` e `modules/`. Existe ainda um wrapper web fino
+  `app_web.py` (Flask) que expõe parte da lógica como JSON. **Lembre-se:** os
+  pacotes `core/`/`modules/` não estão commitados (ver "Critical context").
+- **[ALVO]** Arquitetura web cliente-servidor: API backend stateless + frontend
+  web (SPA), banco gerenciado, workers assíncronos para tarefas pesadas (geração
+  de IA, PDFs, relatórios). Multi-tenant com isolamento de dados por escritório.
+
+## 5. Segurança
+
+- **[ATUAL]** Mínima: app local sem autenticação. Único segredo é a chave OpenAI.
+  `.pre-commit-config.yaml` roda TruffleHog (commit/push) para detectar segredos.
+  Atenção: `.env` está versionado (com placeholders) apesar de listado no `.gitignore`.
+- **[ALVO]** Como SaaS jurídico, segurança é crítica e ainda inexistente:
+  autenticação + RBAC, isolamento entre tenants, **conformidade com a LGPD**
+  (dados pessoais sensíveis de clientes/processos), criptografia em trânsito e em
+  repouso, gestão de segredos fora do repo, trilha de auditoria, e cuidado ao
+  enviar dados de processos a APIs de IA externas (OpenAI).
+
+## 6. Banco de dados
+
+- **[ATUAL]** SQLite local (`core/database.py`, arquivo `core/database.db`
+  ignorado pelo git), ~7 tabelas (clientes, processos, magistrados, acordos,
+  referências jurídicas, peças geradas, etc.). Acesso direto via funções
+  (`get_all_lawsuits`, `create_cliente`, ...). Adequado a um único usuário.
+- **[ALVO]** Banco relacional gerenciado (PostgreSQL é o caminho natural —
+  `docker-compose.yml` já tem um stub comentado), com coluna/escopo de tenant em
+  todas as tabelas, migrações versionadas e novas entidades para audiências,
+  tarefas e relatórios.
+
+## 7. Escalabilidade
+
+- **[ATUAL]** Não escala: desktop monousuário; o Flask (`app_web.py`) chama
+  `db.init_db()` no import e a geração de IA/PDF é síncrona.
+- **[ALVO]** API sem estado atrás de load balancer, pool de conexões ao banco,
+  fila + workers (ex.: Celery/RQ) para IA e geração de documentos/relatórios,
+  e cache para leituras frequentes.
+
+## 8. Frontend
+
+- **[ATUAL]** Desktop em **CustomTkinter** (`main.py`). Não há frontend web:
+  `app_web.py` devolve apenas JSON, sem templates/HTML; não há `templates/` nem
+  `static/`.
+- **[ALVO]** Aplicação web (SPA — ex.: React/Vue) consumindo a API, com telas
+  de clientes, processos, agenda de audiências, tarefas, geração de documentos
+  e dashboards/relatórios.
+
+## 9. Backend
+
+- **[ATUAL]** Lógica de negócio nos pacotes `modules/` e `core/` (ausentes do
+  checkout). Exposição web limitada via Flask `app_web.py` (endpoints: dashboard
+  `/`, `/api/processos`, `/api/clientes`, `/api/calcular`, `/api/gerar-peca`,
+  `/health`). Os arquivos `api.py`/`cli.py` na raiz são de **outro projeto**
+  (AgenticSeek) e não fazem parte do backend deste sistema.
+- **[ALVO]** API HTTP completa (Flask ou FastAPI) com autenticação, endpoints
+  REST para todos os recursos, validação de entrada e os módulos atuais
+  reaproveitados como camada de serviço.
+
+## 10. IA integrada
+
+- **[ATUAL]** `modules/ia/gerador.py` (`GeradorPecas`) gera 10 tipos de peça
+  jurídica via **OpenAI GPT-4.1**; sem chave de API, usa templates locais
+  estruturados como fallback. `modules/api_bridge.py` (`LegalAIClient`) integra
+  com um serviço externo de "Legal AI". A chave é configurada pela UI/`.env`.
+- **[ALVO]** Manter a IA central ao produto, com chaves por tenant/escritório,
+  controle de custo/uso, e atenção a privacidade (não enviar dados sensíveis sem
+  necessidade). Ao trabalhar em recursos de IA neste repo, prefira os modelos
+  Claude mais recentes quando construir novas integrações.
+
+## 11. Deploy
+
+- **[ATUAL]** Configurações conflitantes (ver "Deployment notes" acima):
+  `Procfile`/`railway.json`/`render.yaml` rodam `python main.py` (GUI — não roda
+  headless em servidor), enquanto `docker-compose.yml` roda o Flask `app_web.py`
+  na porta 5000. Dois `Dockerfile`s e vários scripts `*.ps1`/`deploy.*` apontam
+  para setups diferentes.
+- **[ALVO]** Para um SaaS, o alvo de deploy deve ser **`app_web.py`/a API web**
+  em container, não a GUI desktop. Padronizar os arquivos de deploy nesse
+  entry point e remover os que apontam para `main.py`.
+
+## 12. Futuro / crescimento
+
+Lacunas declaradas como objetivo e ainda não implementadas:
+
+- **Controle de audiências** — agenda, prazos processuais, lembretes.
+- **Organização de tarefas** — to-dos, atribuição a usuários, status.
+- **Relatórios** — relatórios consolidados (hoje há apenas exportações pontuais
+  de PDF/CSV/TXT).
+- **Módulo financeiro** — honorários, faturamento e relatórios financeiros
+  (implícito pelo perfil "Financeiro"); inexistente hoje.
+- **Plataforma SaaS** — multi-tenant, autenticação/RBAC, migração SQLite → Postgres,
+  frontend web, processamento assíncrono e conformidade LGPD.
+
+> Pré-requisito técnico para qualquer evolução: os pacotes `core/` e `modules/`
+> precisam ser commitados ao repositório — sem eles o sistema não executa nem
+> roda os testes.
