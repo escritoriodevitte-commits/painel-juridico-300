@@ -113,8 +113,10 @@ Legacy deploy configs disagree on the entry point and target the broken desktop 
   `docker-compose.yml` → port 5000), which also can't run (missing packages).
 - `Dockerfile` vs `Dockerfile.backend` and the many `*.ps1` / `deploy.*` scripts
   target different legacy setups.
-- **`render.yaml` now deploys the new `backend/` SaaS API** (FastAPI + Postgres),
-  not the legacy app — see `backend/Dockerfile` and `backend/README.md`.
+- **Deploy of the new `backend/` SaaS API now lives in `fly.toml` (recommended,
+  cheapest: Fly.io + SQLite on a persistent volume, scales to zero) and `render.yaml`
+  (alternative: web service + Postgres).** Both run `alembic upgrade head` on start
+  via `backend/Dockerfile`. Not the legacy app — see `backend/README.md`.
 
 There are dozens of `.md` files (deployment guides, push instructions, status
 reports, translated READMEs) — most are redundant historical artifacts. Treat

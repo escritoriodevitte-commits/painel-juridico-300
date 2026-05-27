@@ -93,17 +93,30 @@ Em produção defina `AUTO_CREATE_TABLES=0` (o schema passa a ser responsabilida
 do Alembic). Em dev/SQLite, `AUTO_CREATE_TABLES=1` (padrão) cria as tabelas no
 startup, sem precisar rodar migração.
 
-## Deploy (Render, barato)
+## Deploy
 
-`render.yaml` (na raiz) é um Blueprint que provisiona um **web service free** +
-**Postgres free** e, no start, roda `alembic upgrade head` e sobe gunicorn com
-workers uvicorn. Variáveis: `SECRET_KEY` (gerado), `DATABASE_URL` (do Postgres),
-`AUTO_CREATE_TABLES=0`, `CORS_ORIGINS`.
+**Recomendado — Fly.io + SQLite em volume (mais barato).** Ver `fly.toml` na raiz.
 
-Avisos de custo: o **filesystem do Render free é efêmero** (por isso Postgres, não
-SQLite); o Postgres free expira em 90 dias (~US$7/mês depois); o web service free
-hiberna após inatividade. Alternativa portátil: `backend/Dockerfile`
-(`docker build -f backend/Dockerfile -t saas-juridico .` a partir da raiz).
+```bash
+fly launch --no-deploy                       # ou ajuste "app" no fly.toml
+fly volumes create saas_data --size 1 --region gru
+fly secrets set SECRET_KEY=$(openssl rand -hex 32)
+fly deploy
+```
+
+1 container pequeno com SQLite num volume persistente (`/data/app.db`), sem banco
+gerenciado, **escalando a zero** quando ocioso. SQLite em WAL + `busy_timeout`
+(`database.py`) para concorrência; `WEB_CONCURRENCY=1`.
+
+**Alternativa — Render** (`render.yaml`): web service free + Postgres free. Mais
+caro: disco free é efêmero (exige Postgres) e o Postgres free expira em 90 dias
+(~US$7/mês depois).
+
+Os dois aplicam `alembic upgrade head` no start. Imagem portátil:
+`docker build -f backend/Dockerfile -t saas-juridico .` (a partir da raiz).
+
+Ao crescer, trocar SQLite → Postgres é só mudar `DATABASE_URL` (sem mudar código)
+e subir `WEB_CONCURRENCY`.
 
 ## Segurança implementada
 

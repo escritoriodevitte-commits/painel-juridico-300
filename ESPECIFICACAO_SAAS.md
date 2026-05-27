@@ -215,21 +215,30 @@ Audiencia, Tarefa, Honorario, AuditLog.
 
 # Custo e deploy (barato)
 
-Estratégia para manter custo baixo no início e escalar só quando houver receita:
+Estratégia para manter custo baixo no início e escalar só quando houver receita.
 
-- **Banco**: o backend usa SQLite por padrão e troca para Postgres apenas mudando
-  `DATABASE_URL` (já normalizado no `config.py`). Comece com o **Postgres free do
-  Render** (90 dias grátis; depois ~US$7/mês) ou outro provedor com free tier.
-- **App**: 1 web service free no Render (`render.yaml` já configurado). O free
-  tier hiberna após inatividade e acorda na 1ª requisição — aceitável no início.
+**Recomendado (mais barato e rápido): Fly.io + SQLite em volume.** Ver `fly.toml`.
+- 1 container pequeno (`shared-cpu-1x`, 256MB) com SQLite num **volume persistente**
+  (`/data/app.db`), sem banco gerenciado (US$0 de banco).
+- **Escala a zero** quando ocioso (`min_machines_running = 0`): paga ~nada parado e
+  acorda em poucos segundos na 1ª requisição.
+- `WEB_CONCURRENCY=1` (consistente com SQLite e com o rate limit em memória).
+  SQLite roda em WAL + `busy_timeout` (ver `backend/database.py`) para concorrência.
+
+**Alternativa: Render** (`render.yaml`). Web service free + Postgres free, mas o
+disco free é efêmero (por isso Postgres) e o Postgres free expira em 90 dias
+(~US$7/mês depois). Mais caro que o Fly para começar.
+
+Independente do host:
+- **Banco**: troca SQLite → Postgres só mudando `DATABASE_URL` (normalizado no
+  `config.py`); sem mudança de código.
 - **IA**: custo só quando `OPENAI_API_KEY` está configurada; sem ela, usa template
   local (R$ 0). Controlar uso/custo por tenant é alvo.
-- **Escala**: ao crescer, subir o plano do web service, adicionar workers
-  (`WEB_CONCURRENCY`) e mover o rate limit para Redis (hoje é em memória, 1 instância).
+- **Escala**: ao crescer, aumentar a VM, ir para Postgres, subir `WEB_CONCURRENCY`
+  e mover o rate limit para Redis (hoje é em memória, 1 instância).
 
-Deploy: `render.yaml` (Blueprint) provisiona o web service + Postgres e roda
-`alembic upgrade head` no start. Alternativa portátil: `backend/Dockerfile`
-(build a partir da raiz do repo) para VPS/qualquer plataforma de containers.
+Deploy portátil: `backend/Dockerfile` (build a partir da raiz do repo) roda em
+Fly, VPS ou qualquer plataforma de containers; aplica `alembic upgrade head` no start.
 
 # Billing / assinatura (desenho — não implementado)
 
