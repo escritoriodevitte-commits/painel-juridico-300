@@ -106,13 +106,15 @@ There is no lint or type-check configuration in the repo.
 
 ## Deployment notes (inconsistent)
 
-Multiple deploy targets are configured and they disagree on the entry point:
+Legacy deploy configs disagree on the entry point and target the broken desktop app:
 
-- `Procfile`, `railway.json`, `render.yaml` all run `python main.py` — but that
-  is the GUI and will not run on a headless server. The web-deployable entry
-  point is `app_web.py` (Flask, used by `docker-compose.yml` → port 5000).
+- `Procfile` and `railway.json` run `python main.py` — the GUI, which will not run
+  on a headless server. The legacy web entry point is `app_web.py` (Flask, used by
+  `docker-compose.yml` → port 5000), which also can't run (missing packages).
 - `Dockerfile` vs `Dockerfile.backend` and the many `*.ps1` / `deploy.*` scripts
-  target different setups.
+  target different legacy setups.
+- **`render.yaml` now deploys the new `backend/` SaaS API** (FastAPI + Postgres),
+  not the legacy app — see `backend/Dockerfile` and `backend/README.md`.
 
 There are dozens of `.md` files (deployment guides, push instructions, status
 reports, translated READMEs) — most are redundant historical artifacts. Treat
@@ -126,5 +128,9 @@ multi-tenant SaaS for labor lawyers (independent of the legacy desktop app
 above, which still cannot run). It implements JWT auth + RBAC over four roles
 (admin, advogado, cliente, financeiro), tenant isolation, and CRUD for clientes,
 processos (with andamentos/audiências), tarefas, and honorários (financeiro),
-plus a template-based IA endpoint. See `backend/README.md` for run/test commands.
-The full product spec lives in `ESPECIFICACAO_SAAS.md`.
+plus a template-based IA endpoint. It also ships production-readiness: Alembic
+migrations (`alembic.ini`, `backend/migrations/`), in-memory rate limiting on
+auth endpoints, security headers + CORS, a `backend/Dockerfile`, and a `render.yaml`
+Blueprint (web service + Postgres). Run `pytest backend/tests` (12 tests) and
+`uvicorn backend.main:app --reload`; see `backend/README.md`. SQLite by default,
+Postgres via `DATABASE_URL`. Full product/cost/billing spec: `ESPECIFICACAO_SAAS.md`.

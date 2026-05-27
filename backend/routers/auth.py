@@ -12,6 +12,7 @@ from .. import models, schemas
 from ..config import settings
 from ..deps import audit, get_current_user, require_roles
 from ..database import get_db
+from ..ratelimit import login_rate_limit
 from ..security import (
     create_access_token,
     create_refresh_token,
@@ -50,7 +51,7 @@ def register(payload: schemas.RegisterIn, db: Session = Depends(get_db)):
     return user
 
 
-@router.post("/login", response_model=schemas.TokenOut)
+@router.post("/login", response_model=schemas.TokenOut, dependencies=[login_rate_limit])
 def login(
     form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
@@ -120,7 +121,7 @@ def create_user(
     return user
 
 
-@router.post("/password-reset/request")
+@router.post("/password-reset/request", dependencies=[login_rate_limit])
 def password_reset_request(
     payload: schemas.PasswordResetRequestIn, db: Session = Depends(get_db)
 ):

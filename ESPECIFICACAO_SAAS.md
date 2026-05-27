@@ -210,3 +210,46 @@ Audiencia, Tarefa, Honorario, AuditLog.
   tenants, contratos de API, e mock das chamadas de IA.
 - Rodar em CI a cada push/PR (workflow de testes ainda é alvo).
 - Suíte inicial em `backend/tests/`.
+
+---
+
+# Custo e deploy (barato)
+
+Estratégia para manter custo baixo no início e escalar só quando houver receita:
+
+- **Banco**: o backend usa SQLite por padrão e troca para Postgres apenas mudando
+  `DATABASE_URL` (já normalizado no `config.py`). Comece com o **Postgres free do
+  Render** (90 dias grátis; depois ~US$7/mês) ou outro provedor com free tier.
+- **App**: 1 web service free no Render (`render.yaml` já configurado). O free
+  tier hiberna após inatividade e acorda na 1ª requisição — aceitável no início.
+- **IA**: custo só quando `OPENAI_API_KEY` está configurada; sem ela, usa template
+  local (R$ 0). Controlar uso/custo por tenant é alvo.
+- **Escala**: ao crescer, subir o plano do web service, adicionar workers
+  (`WEB_CONCURRENCY`) e mover o rate limit para Redis (hoje é em memória, 1 instância).
+
+Deploy: `render.yaml` (Blueprint) provisiona o web service + Postgres e roda
+`alembic upgrade head` no start. Alternativa portátil: `backend/Dockerfile`
+(build a partir da raiz do repo) para VPS/qualquer plataforma de containers.
+
+# Billing / assinatura (desenho — não implementado)
+
+Modelo SaaS por assinatura de escritório (tenant). **Recomendação: Stripe.**
+
+- **Planos**: ex.: Free (1 usuário, N processos), Pro (mensal por escritório),
+  por assento (preço × nº de usuários). Definir limites por plano.
+- **Entidades a adicionar**: `Subscription` (tenant_id, plano, status,
+  `current_period_end`, `stripe_customer_id`, `stripe_subscription_id`) e,
+  opcionalmente, `Plan`/`PriceTier`.
+- **Fluxo Stripe**:
+  1. Ao criar o tenant, criar um *Customer* no Stripe.
+  2. *Stripe Checkout* (ou *Billing Portal*) para o admin assinar/gerenciar.
+  3. **Webhook** (`/api/v1/billing/webhook`) tratando `checkout.session.completed`,
+     `customer.subscription.updated/deleted`, `invoice.payment_failed` para
+     atualizar `Subscription.status`.
+  4. Validar a assinatura do webhook com o *signing secret* (segredo via env).
+- **Enforcement**: uma dependência (ex.: `require_active_subscription`) que
+  bloqueia escrita quando a assinatura não está ativa, e checagem de limites por
+  plano. Leitura pode permanecer liberada (somente-leitura) em estado inadimplente.
+- **Segurança/fiscal**: nunca armazenar dados de cartão (Stripe cuida disso);
+  emitir nota fiscal conforme a legislação (integração fiscal é alvo separado).
+

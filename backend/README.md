@@ -79,12 +79,45 @@ curl localhost:8000/api/v1/clientes -H 'Authorization: Bearer <ACCESS_TOKEN>'
 | Criar usuários | ✔ | — | — | — |
 | Excluir cliente/processo | ✔ | — | — | — |
 
-## Notas de segurança / próximos passos
+## Migrações (Alembic)
 
-Implementado: hash de senha (bcrypt), JWT com `exp` e algoritmo explícito (sem
-`alg:none`), escopo de tenant derivado do token, ORM parametrizado (anti-SQLi),
-trilha de auditoria (`AuditLog`).
+O schema é versionado com Alembic (`alembic.ini` na raiz, scripts em
+`backend/migrations/`). A URL vem de `DATABASE_URL` (lida em `migrations/env.py`).
 
-A construir (ver `ESPECIFICACAO_SAAS.md`): rate limiting, revogação de refresh
-token, migrações Alembic, envio de e-mail no reset (hoje o token volta na
-resposta para facilitar dev), CORS/CSP, e conformidade LGPD.
+```bash
+alembic upgrade head                          # aplica todas as migrações
+alembic revision --autogenerate -m "mudança"  # gera nova migração ao alterar models.py
+```
+
+Em produção defina `AUTO_CREATE_TABLES=0` (o schema passa a ser responsabilidade
+do Alembic). Em dev/SQLite, `AUTO_CREATE_TABLES=1` (padrão) cria as tabelas no
+startup, sem precisar rodar migração.
+
+## Deploy (Render, barato)
+
+`render.yaml` (na raiz) é um Blueprint que provisiona um **web service free** +
+**Postgres free** e, no start, roda `alembic upgrade head` e sobe gunicorn com
+workers uvicorn. Variáveis: `SECRET_KEY` (gerado), `DATABASE_URL` (do Postgres),
+`AUTO_CREATE_TABLES=0`, `CORS_ORIGINS`.
+
+Avisos de custo: o **filesystem do Render free é efêmero** (por isso Postgres, não
+SQLite); o Postgres free expira em 90 dias (~US$7/mês depois); o web service free
+hiberna após inatividade. Alternativa portátil: `backend/Dockerfile`
+(`docker build -f backend/Dockerfile -t saas-juridico .` a partir da raiz).
+
+## Segurança implementada
+
+- Hash de senha (bcrypt) e JWT com `exp` + algoritmo explícito (sem `alg:none`).
+- Escopo de tenant derivado do token (nunca do payload do cliente).
+- ORM parametrizado (anti-SQL injection).
+- Trilha de auditoria (`AuditLog`).
+- **Rate limiting** em `/auth/login` e `/auth/password-reset/request` (em memória,
+  janela fixa; configurável por `LOGIN_RATE_MAX`/`LOGIN_RATE_WINDOW_SEC`).
+- Cabeçalhos de segurança (`X-Frame-Options`, `X-Content-Type-Options`,
+  `Referrer-Policy`, CSP) e CORS configurável (`CORS_ORIGINS`).
+
+## Próximos passos (ver `ESPECIFICACAO_SAAS.md`)
+
+Revogação de refresh token, rate limit distribuído (Redis) para múltiplos workers,
+envio de e-mail no reset (hoje o token volta na resposta p/ dev), billing/assinatura
+(Stripe), conformidade LGPD, e frontend web.

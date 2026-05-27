@@ -1,10 +1,29 @@
+# Render Blueprint — publica o backend SaaS (FastAPI) + Postgres.
+# Substitui o deploy antigo da GUI desktop (que não roda headless).
+databases:
+  - name: saas-juridico-db
+    plan: free          # Postgres free do Render expira em 90 dias; depois ~US$7/mês.
+
 services:
   - type: web
-    name: painel-juridico
-    env: python
-    plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python main.py"
+    name: saas-juridico-api
+    runtime: python
+    plan: free          # free hiberna após inatividade; sobe na 1ª requisição.
+    healthCheckPath: /health
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "alembic upgrade head && gunicorn backend.main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT --workers $WEB_CONCURRENCY"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9
+        value: "3.11"
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: AUTO_CREATE_TABLES
+        value: "0"        # schema via Alembic (startCommand roda upgrade)
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: saas-juridico-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: "*"        # restrinja ao domínio do frontend em produção

@@ -3,6 +3,8 @@ import os
 # Banco em memória para a engine real (usada só no startup); queries usam o override.
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("SECRET_KEY", "test-secret")
+# Rate limit alto nos testes funcionais (o limiter é exercitado em teste próprio).
+os.environ.setdefault("LOGIN_RATE_MAX", "100000")
 
 import pytest
 from fastapi.testclient import TestClient
