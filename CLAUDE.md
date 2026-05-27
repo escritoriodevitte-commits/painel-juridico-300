@@ -266,3 +266,66 @@ Lacunas declaradas como objetivo e ainda não implementadas:
 > Pré-requisito técnico para qualquer evolução: os pacotes `core/` e `modules/`
 > precisam ser commitados ao repositório — sem eles o sistema não executa nem
 > roda os testes.
+
+---
+
+# Módulos do SaaS (alvo)
+
+> Tudo nesta seção é **[ALVO]** — escopo planejado do SaaS. Hoje não existe
+> autenticação, financeiro nem persistência multi-tenant; a IA é o único módulo
+> parcialmente presente (via `modules/ia/gerador.py`, fora do checkout atual).
+
+## Autenticação
+- Login com e-mail/senha; senhas com hash forte (ex.: bcrypt/argon2 — nunca texto puro).
+- **JWT** para sessões da API (access token curto + refresh token); ver "JWT seguro" abaixo.
+- Recuperação de senha por token de uso único com expiração.
+- Permissões por papel (RBAC) sobre os 4 perfis: administrador, advogado, cliente, financeiro.
+
+## Clientes
+- Cadastro (dados pessoais; CPF/CNPJ, contato, endereço).
+- Documentos anexados ao cliente (upload/armazenamento de arquivos).
+- Histórico de interações e vínculo com seus processos.
+
+## Processos
+- Número do processo e tribunal/vara.
+- Andamento (movimentações/timeline).
+- **Audiências** vinculadas ao processo (data, tipo, local) — módulo novo.
+- Anexos (peças, documentos, provas).
+
+## Financeiro
+- Honorários (cálculo, lançamento, status de pagamento).
+- Contratos (geração e gestão).
+- Boletos / cobrança.
+- Relatórios financeiros. Acessível ao perfil **Financeiro** (sem acesso ao mérito jurídico).
+
+## IA
+- Gerar petições (já existe base em `modules/ia/gerador.py` — 10 tipos de peça via GPT-4.1 + fallback local).
+- Resumir PDFs (novo).
+- Responder perguntas jurídicas (novo).
+- Analisar contratos (novo).
+- Considerações: chave/uso por tenant, controle de custo, e **não enviar dados
+  pessoais sensíveis a APIs externas sem necessidade** (ver LGPD).
+
+# Requisitos de segurança (alvo)
+
+> Padrões obrigatórios para o SaaS. **Nenhum está implementado hoje** — o estado
+> atual é uma app desktop local sem autenticação. Tratar como requisitos a construir.
+
+- **OWASP Top 10** — usar como checklist de referência em todo o desenvolvimento.
+- **JWT seguro** — algoritmo assimétrico ou segredo forte fora do repo; expiração
+  curta no access token; refresh token revogável; validar `iss`/`aud`/`exp`;
+  nunca aceitar `alg: none`.
+- **Rate limiting** — em login e endpoints sensíveis para mitigar brute force/abuso.
+- **Criptografia** — TLS em trânsito; dados sensíveis e em repouso criptografados;
+  segredos via variáveis de ambiente / cofre, nunca versionados (lembrar que
+  `.env` está atualmente versionado — corrigir).
+- **LGPD** — base legal para tratamento de dados pessoais, minimização, direito
+  de exclusão, e cautela ao enviar dados de clientes/processos para IA externa.
+- **Logs** — registrar eventos relevantes sem vazar dados sensíveis/segredos.
+- **Auditoria** — trilha de quem fez o quê (ações por usuário/tenant).
+- **Backup** — rotina de backup e restauração do banco (multi-tenant).
+- **SQL Injection** — exclusivamente queries parametrizadas / ORM; nunca
+  concatenar entrada do usuário em SQL.
+- **XSS** — escapar/sanitizar saída no frontend; CSP.
+- **CSRF** — proteção em fluxos baseados em cookie; APIs com JWT em header são
+  menos expostas, mas validar a estratégia conforme o frontend.
