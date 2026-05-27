@@ -329,3 +329,65 @@ Lacunas declaradas como objetivo e ainda não implementadas:
 - **XSS** — escapar/sanitizar saída no frontend; CSP.
 - **CSRF** — proteção em fluxos baseados em cookie; APIs com JWT em header são
   menos expostas, mas validar a estratégia conforme o frontend.
+
+---
+
+# Desenho técnico (alvo)
+
+> Os 10 eixos solicitados (arquitetura, modelagem, APIs, autenticação, frontend,
+> IA, segurança, testes, deploy, escalabilidade). Para evitar duplicação, os que
+> já têm seção própria são apenas referenciados; os três detalhados aqui
+> (**modelagem, APIs, testes**) ainda não tinham tratamento próprio.
+
+- **Arquitetura** — ver "Especificação do sistema" §4.
+- **Autenticação** — ver "Módulos do SaaS → Autenticação".
+- **Frontend** — ver §8.
+- **IA** — ver §10 e "Módulos do SaaS → IA".
+- **Segurança** — ver "Requisitos de segurança".
+- **Deploy** — ver §11 e "Deployment notes".
+- **Escalabilidade** — ver §7.
+
+## Modelagem de dados (alvo)
+
+Hoje: SQLite com ~7 tabelas e acesso direto (sem ORM, sem tenant). Alvo
+multi-tenant em PostgreSQL — toda tabela com `tenant_id` (escritório) e
+migrações versionadas. Entidades principais e relações:
+
+- **Tenant (escritório)** 1—N **Usuário** (papel: admin/advogado/cliente/financeiro).
+- **Cliente** 1—N **Processo**; **Cliente** 1—N **Documento**.
+- **Processo** (número, tribunal/vara, status) 1—N **Andamento**, 1—N **Audiência**
+  (data, tipo, local), 1—N **Anexo**, 1—N **Peça gerada**.
+- **Magistrado** N—N/1—N **Processo**; **Acordo** 1—1 **Processo**.
+- **Tarefa** (responsável, prazo, status) vinculada a processo/cliente.
+- Financeiro: **Honorário**, **Contrato**, **Boleto/Cobrança** vinculados a
+  cliente/processo.
+- **AuditLog** (usuário, ação, entidade, timestamp) — transversal.
+
+## APIs (alvo)
+
+Não existe API REST completa hoje (só os endpoints JSON de `app_web.py`). Alvo:
+
+- REST versionada (`/api/v1/...`), JSON, autenticada por JWT (Bearer), com escopo
+  de tenant derivado do token (nunca do payload do cliente).
+- Recursos por módulo: `auth` (login, refresh, recuperação de senha),
+  `clientes`, `processos` (+ sub-recursos `andamentos`, `audiencias`, `anexos`),
+  `tarefas`, `documentos`/`ia`, `financeiro`, `relatorios`.
+- Validação de entrada (Pydantic se FastAPI), paginação em listagens,
+  rate limiting em endpoints sensíveis, erros padronizados.
+- Operações longas (geração de IA, PDFs, relatórios) idealmente assíncronas
+  (job + polling) — ver §7.
+
+## Testes (alvo)
+
+Estado atual: scripts `test_*.py` na raiz com harness próprio de pass/fail
+(`python test_X.py`), **não** pytest, e que hoje falham por `core/`/`modules/`
+ausentes. Alvo:
+
+- Migrar para **pytest** (descoberta automática, fixtures, asserts nativos).
+- Banco de teste isolado (SQLite em memória ou Postgres efêmero), com fixtures
+  por tenant para validar isolamento.
+- Cobrir: regras da calculadora (CLT), autenticação/RBAC (cada papel só acessa
+  o que deve), contratos de API, e mock das chamadas de IA (não bater na OpenAI
+  em teste).
+- Rodar em CI a cada push/PR (não há workflow de testes hoje — o único
+  `.github/workflows/` é de publicação SLSA, não de testes).
